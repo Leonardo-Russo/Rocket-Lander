@@ -8,7 +8,7 @@ import utils
 
 class Rocket(gym.Env):
     """
-    Rocket and environment.
+    Rocket & Environment.
     The rocket is simplified into a rigid body model with a thin rod,
     considering acceleration and angular acceleration and air resistance
     proportional to velocity.
@@ -28,76 +28,102 @@ class Rocket(gym.Env):
         self.task = task
         self.rocket_type = rocket_type
 
+        # Physical Constants
         self.g = 1.62  # gravity (m/s^2)
         self.H = 50  # rocket height (meters)
         self.I = 1/12*self.H*self.H  # Moment of inertia
         self.dt = 0.05
 
+        # Set World Boundaries
         self.world_x_min = -300  # meters
         self.world_x_max = 300
         self.world_y_min = -30
         self.world_y_max = 570
 
-        # target point
+        # Define Target Point
         self.target_x, self.target_y, self.target_r = 0, self.H/2.0, 50
 
+        # Initialize Utilities
         self.already_landing = False
         self.already_crash = False
         self.max_steps = max_steps
 
-        # viewport height x width (pixels)
+        # Set Viewport height x width [pixels]
         self.viewport_h = int(viewport_h)
         self.viewport_w = int(viewport_h * (self.world_x_max - self.world_x_min) / (self.world_y_max - self.world_y_min))
         self.step_id = 0
 
+        # Initialize State and Action Table
         self.state = self.create_random_state()
         self.action_table = self.create_action_table()
 
         self.state_dims = 8
         self.action_dims = len(self.action_table)
 
+        # Load Background Image
         if path_to_bg_img is None:
             path_to_bg_img = 'Gallery/landing.jpg'
         self.bg_img = utils.load_bg_img(path_to_bg_img, w=self.viewport_w, h=self.viewport_h)
 
-        self.state_buffer = []
+        self.state_buffer = []      # initalize state buffer
 
-        # Define action space and observation space
+        # Define Action space and Observation space
         self.action_space = spaces.Discrete(len(self.action_table))
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.state_dims,), dtype=np.float32)
 
 
     def reset(self, **kwargs):
-        # Reset the environment to an initial state
+        '''
+        Reset the environment to an initial state.
+        '''
+
         self.state = self.create_random_state()
         self.state_buffer = []
         self.step_id = 0
         self.already_landing = False
         self.already_crash = False
         cv2.destroyAllWindows()     # Close any open CV windows
-        infos = {}
+        infos = {}                  # neglet reset infos needed from Gymnasium
+
         return self.flatten(self.state), infos
 
+
     def create_action_table(self):
-        f0 = 0.2 * self.g           # Thrust magnitude
+        '''
+        Define the Action Table from Physical Parameters
+        '''
+
+        # Thrust magnitude
+        f0 = 0.2 * self.g           
         f1 = 1.0 * self.g
         f2 = 2 * self.g
-        vphi0 = 0                   # Nozzle angular acceleration
-        vphi1 = 30 / 180 * np.pi
+
+        # Nozzle angular acceleration
+        vphi0 = 0                   
+        vphi1 = 30 / 180 * np.pi    
         vphi2 = -30 / 180 * np.pi
 
+        # 3x3 Action Table
         action_table = [[f0, vphi0], [f0, vphi1], [f0, vphi2],
                         [f1, vphi0], [f1, vphi1], [f1, vphi2],
                         [f2, vphi0], [f2, vphi1], [f2, vphi2]
                         ]
+        
         return action_table
 
 
     def get_random_action(self):
+        '''
+        Helper function to create random action.
+        '''
+
         return random.randint(0, len(self.action_table)-1)
 
 
     def create_random_state(self):
+        '''
+        Helper function to create random state.
+        '''
 
         # Predefined Locations
         x_range = self.world_x_max - self.world_x_min
@@ -105,13 +131,13 @@ class Rocket(gym.Env):
         xc = (self.world_x_max + self.world_x_min) / 2.0
         yc = (self.world_y_max + self.world_y_min) / 2.0
 
-        
+        # Set the Initial State of the Rocket
         x = random.uniform(xc - x_range / 4.0, xc + x_range / 4.0)
         y = yc + 0.4*y_range
         if x <= 0:
-            theta = -85 / 180 * np.pi
+            theta = -85 / 180 * np.pi       # pointing east
         else:
-            theta = 85 / 180 * np.pi
+            theta = 85 / 180 * np.pi        # pointing west
         vy = -50
 
 
@@ -125,14 +151,20 @@ class Rocket(gym.Env):
         return state
 
     def check_crash(self, state):
+        '''
+        Checks the event of a crash.
+        '''
 
+        # Compute Local Variables
         x, y = state['x'], state['y']
         vx, vy = state['vx'], state['vy']
         theta = state['theta']
         vtheta = state['vtheta']
         v = (vx**2 + vy**2)**0.5
 
-        crash = False
+        crash = False   # initialize crash flag to False
+
+        # Check crash conditions
         if y >= self.world_y_max - self.H / 2.0:
             crash = True
         if y <= 0 + self.H / 2.0 and v >= 15.0:
@@ -147,6 +179,9 @@ class Rocket(gym.Env):
         return crash
 
     def check_landing_success(self, state):
+        '''
+        Checks the event of a successful landing.
+        '''
             
         x, y = state['x'], state['y']
         vx, vy = state['vx'], state['vy']
@@ -154,7 +189,7 @@ class Rocket(gym.Env):
         vtheta = state['vtheta']
         v = (vx**2 + vy**2)**0.5
 
-        # Conditions for a successful landing
+        # Check successful landing conditions
         near_target = y <= 0 + self.H / 2.0 and abs(x) < self.target_r
         almost_upright = abs(theta) < np.pi / 12  # Upright condition tightened
         low_angular_velocity = abs(vtheta) < 1.0  # Threshold for angular velocity
@@ -163,6 +198,10 @@ class Rocket(gym.Env):
 
 
     def calculate_reward(self, state):
+        '''
+        Compute the reward for the Training.
+        '''
+
         x_range = self.world_x_max - self.world_x_min
         y_range = self.world_y_max - self.world_y_min
 
@@ -196,6 +235,9 @@ class Rocket(gym.Env):
         return reward
 
     def step(self, action):
+        '''
+        Perform one time step forward in the environment.
+        '''
 
         x, y, vx, vy = self.state['x'], self.state['y'], self.state['vx'], self.state['vy']
         theta, vtheta = self.state['theta'], self.state['vtheta']
