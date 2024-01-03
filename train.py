@@ -25,7 +25,7 @@ if __name__ == '__main__':
         model = PPO("MlpPolicy", env, verbose=1)
 
     # Train the model
-    model.learn(total_timesteps=100)  # Adjust the number of timesteps as needed
+    model.learn(total_timesteps=1000000)  # Adjust the number of timesteps as needed
 
     # Save the model
     model_path = os.path.join('models', task + '_ppo')
