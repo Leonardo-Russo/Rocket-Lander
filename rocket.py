@@ -28,7 +28,7 @@ class Rocket(object):
     """
 
     def __init__(self, max_steps, task='hover', rocket_type='falcon',
-                 viewport_h=768, path_to_bg_img=None):
+                 viewport_h=600, path_to_bg_img=None):
 
         self.task = task
         self.rocket_type = rocket_type
@@ -189,11 +189,11 @@ class Rocket(object):
 
         dist_reward = 0.1*(1.0 - dist_norm)
 
-        if abs(state['theta']) <= np.pi / 12.0:
-            pose_reward = 1
+        if abs(state['theta']) <= np.pi / 6.0:
+            pose_reward = 0.1
         else:
             pose_reward = abs(state['theta']) / (0.5*np.pi)
-            pose_reward = 0.5 * (1.0 - pose_reward)
+            pose_reward = 0.1 * (1.0 - pose_reward)
 
         reward = dist_reward + pose_reward
 

@@ -7,6 +7,9 @@ import utils
 import os
 import glob
 
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+
 # Decide which device we want to run on
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -17,7 +20,13 @@ if __name__ == '__main__':
     max_m_episode = 800000
     max_steps = 800
 
-    env = Rocket(task=task, max_steps=max_steps)
+    # env = Rocket(task=task, max_steps=max_steps)
+
+    # Initialize the Rocket environment
+    env_fn = lambda: Rocket(task='landing', max_steps=800)
+    env = make_vec_env(env_fn, n_envs=4)
+    
+
     ckpt_folder = os.path.join('./', task + '_ckpt')
     if not os.path.exists(ckpt_folder):
         os.mkdir(ckpt_folder)
