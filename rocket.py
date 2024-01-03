@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 import random
 import cv2
-from gym import spaces
+from gymnasium import spaces
 import utils
 
 
@@ -77,7 +77,7 @@ class Rocket(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.state_dims,), dtype=np.float32)
 
 
-    def reset(self):
+    def reset(self, **kwargs):
         # Reset the environment to an initial state
         self.state = self.create_random_state()
         self.state_buffer = []
@@ -85,7 +85,8 @@ class Rocket(gym.Env):
         self.already_landing = False
         self.already_crash = False
         cv2.destroyAllWindows()  # Close any open CV windows
-        return self.flatten(self.state)
+        infos = {}
+        return self.flatten(self.state), infos
 
     def create_action_table(self):
         f0 = 0.2 * self.g  # thrust
@@ -264,7 +265,7 @@ class Rocket(gym.Env):
         else:
             done = False
 
-        return self.flatten(self.state), reward, done, {}
+        return self.flatten(self.state), reward, done, {}, {}
 
     def flatten(self, state):
         x = [state['x'], state['y'], state['vx'], state['vy'],
