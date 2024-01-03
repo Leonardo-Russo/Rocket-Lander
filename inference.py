@@ -1,8 +1,12 @@
-import torch
-from rocket import Rocket
-from policy import ActorCritic
 import os
 import glob
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+from rocket import Rocket
+
 
 # Decide which device we want to run on
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -10,20 +14,28 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if __name__ == '__main__':
 
     task = 'landing'  # 'hover' or 'landing'
+    max_m_episode = 800000
     max_steps = 800
-    ckpt_dir = glob.glob(os.path.join(task+'_ckpt', '*.pt'))[-1]  # last ckpt
 
-    env = Rocket(task=task, max_steps=max_steps)
-    net = ActorCritic(input_dim=env.state_dims, output_dim=env.action_dims).to(device)
-    if os.path.exists(ckpt_dir):
-        checkpoint = torch.load(ckpt_dir)
-        net.load_state_dict(checkpoint['model_G_state_dict'])
+    # Create a vectorized environment
+    env_fn = lambda: Rocket(task=task, max_steps=max_steps)
+    env = make_vec_env(env_fn, n_envs=4, seed=1)
 
-    state = env.reset()
-    for step_id in range(max_steps):
-        action, log_prob, value = net.get_action(state)
-        state, reward, done, _ = env.step(action)
-        env.render(window_name='test')
-        if env.already_crash:
+    # Load the model (if needed)
+    model_path = os.path.join('models', task + '_ppo')
+    model = PPO.load(model_path)
+
+    # Evaluate the model
+    max_eval_steps = 1000
+    obs = env.reset()
+    for step_id in range(max_eval_steps):
+        action, _states = model.predict(obs, deterministic=True)
+        obs, rewards, dones, info = env.step(action)
+        env.envs[0].render()
+        # Use env.unwrapped to access the already_crash attribute directly
+        if env.envs[0].unwrapped.already_crash:
             break
+
+
+
 

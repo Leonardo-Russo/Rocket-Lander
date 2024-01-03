@@ -1,8 +1,5 @@
 import os
-import glob
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from rocket import Rocket
@@ -20,8 +17,12 @@ if __name__ == '__main__':
     env_fn = lambda: Rocket(task=task, max_steps=max_steps)
     env = make_vec_env(env_fn, n_envs=4, seed=1)
 
-    # Initialize the PPO model
-    model = PPO("MlpPolicy", env, verbose=1)
+    # Load the model or create a new one
+    model_path = os.path.join('models', task + '_ppo')
+    if os.path.exists(model_path + ".zip"):
+        model = PPO.load(model_path, env=env)  # Set the environment here
+    else:
+        model = PPO("MlpPolicy", env, verbose=1)
 
     # Train the model
     model.learn(total_timesteps=100)  # Adjust the number of timesteps as needed
@@ -29,15 +30,3 @@ if __name__ == '__main__':
     # Save the model
     model_path = os.path.join('models', task + '_ppo')
     model.save(model_path)
-
-    # Load the model (if needed)
-    # model = PPO.load("ppo_rocket")
-
-    # Evaluate the model
-    obs = env.reset()
-    for i in range(1000):
-        action, _states = model.predict(obs, deterministic=True)
-        obs, rewards, dones, info = env.step(action)
-        # env.render(render_mode='human')
-        env.envs[0].render()
-
