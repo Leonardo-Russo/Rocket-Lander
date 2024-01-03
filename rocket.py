@@ -13,14 +13,7 @@ class Rocket(gym.Env):
     considering acceleration and angular acceleration and air resistance
     proportional to velocity.
 
-    There are two tasks: hover and landing
-    Their reward functions are straight forward and simple.
-
-    For the hover tasks: the step-reward is given based on two factors
-    1) the distance between the rocket and the predefined target point
-    2) the angle of the rocket body (the rocket should stay as upright as possible)
-
-    For the landing task: the step-reward is given based on three factors:
+    The step-reward is given based on three factors:
     1) the distance between the rocket and the predefined landing point.
     2) the angle of the rocket body (the rocket should stay as upright as possible)
     3) Speed and angle at the moment of contact with the ground, when the touching-speed
@@ -29,7 +22,7 @@ class Rocket(gym.Env):
 
     """
 
-    def __init__(self, max_steps, task='hover', rocket_type='falcon', viewport_h=600, path_to_bg_img=None):
+    def __init__(self, max_steps, task='landing', rocket_type='falcon', viewport_h=600, path_to_bg_img=None):
         super(Rocket, self).__init__()
 
         self.task = task
@@ -46,10 +39,7 @@ class Rocket(gym.Env):
         self.world_y_max = 570
 
         # target point
-        if self.task == 'hover':
-            self.target_x, self.target_y, self.target_r = 0, 200, 50
-        elif self.task == 'landing':
-            self.target_x, self.target_y, self.target_r = 0, self.H/2.0, 50
+        self.target_x, self.target_y, self.target_r = 0, self.H/2.0, 50
 
         self.already_landing = False
         self.already_crash = False
@@ -67,7 +57,7 @@ class Rocket(gym.Env):
         self.action_dims = len(self.action_table)
 
         if path_to_bg_img is None:
-            path_to_bg_img = task+'.jpg'
+            path_to_bg_img = 'Gallery/landing.jpg'
         self.bg_img = utils.load_bg_img(path_to_bg_img, w=self.viewport_w, h=self.viewport_h)
 
         self.state_buffer = []
@@ -115,20 +105,15 @@ class Rocket(gym.Env):
         xc = (self.world_x_max + self.world_x_min) / 2.0
         yc = (self.world_y_max + self.world_y_min) / 2.0
 
-        if self.task == 'landing':
-            x = random.uniform(xc - x_range / 4.0, xc + x_range / 4.0)
-            y = yc + 0.4*y_range
-            if x <= 0:
-                theta = -85 / 180 * np.pi
-            else:
-                theta = 85 / 180 * np.pi
-            vy = -50
+        
+        x = random.uniform(xc - x_range / 4.0, xc + x_range / 4.0)
+        y = yc + 0.4*y_range
+        if x <= 0:
+            theta = -85 / 180 * np.pi
+        else:
+            theta = 85 / 180 * np.pi
+        vy = -50
 
-        if self.task == 'hover':
-            x = xc
-            y = yc + 0.2 * y_range
-            theta = random.uniform(-45, 45) / 180 * np.pi
-            vy = -10
 
         state = {
             'x': x, 'y': y, 'vx': 0, 'vy': vy,
@@ -140,52 +125,41 @@ class Rocket(gym.Env):
         return state
 
     def check_crash(self, state):
-        if self.task == 'hover':
-            x, y = state['x'], state['y']
-            theta = state['theta']
-            crash = False
-            if y <= self.H / 2.0:
-                crash = True
-            if y >= self.world_y_max - self.H / 2.0:
-                crash = True
-            return crash
 
-        elif self.task == 'landing':
-            x, y = state['x'], state['y']
-            vx, vy = state['vx'], state['vy']
-            theta = state['theta']
-            vtheta = state['vtheta']
-            v = (vx**2 + vy**2)**0.5
+        x, y = state['x'], state['y']
+        vx, vy = state['vx'], state['vy']
+        theta = state['theta']
+        vtheta = state['vtheta']
+        v = (vx**2 + vy**2)**0.5
 
-            crash = False
-            if y >= self.world_y_max - self.H / 2.0:
-                crash = True
-            if y <= 0 + self.H / 2.0 and v >= 15.0:
-                crash = True
-            if y <= 0 + self.H / 2.0 and abs(x) >= self.target_r:
-                crash = True
-            if y <= 0 + self.H / 2.0 and abs(theta) >= 10/180*np.pi:
-                crash = True
-            if y <= 0 + self.H / 2.0 and abs(vtheta) >= 10/180*np.pi:
-                crash = True
-            return crash
+        crash = False
+        if y >= self.world_y_max - self.H / 2.0:
+            crash = True
+        if y <= 0 + self.H / 2.0 and v >= 15.0:
+            crash = True
+        if y <= 0 + self.H / 2.0 and abs(x) >= self.target_r:
+            crash = True
+        if y <= 0 + self.H / 2.0 and abs(theta) >= 10/180*np.pi:
+            crash = True
+        if y <= 0 + self.H / 2.0 and abs(vtheta) >= 10/180*np.pi:
+            crash = True
+            
+        return crash
 
     def check_landing_success(self, state):
-        if self.task == 'landing':
-            x, y = state['x'], state['y']
-            vx, vy = state['vx'], state['vy']
-            theta = state['theta']
-            vtheta = state['vtheta']
-            v = (vx**2 + vy**2)**0.5
+            
+        x, y = state['x'], state['y']
+        vx, vy = state['vx'], state['vy']
+        theta = state['theta']
+        vtheta = state['vtheta']
+        v = (vx**2 + vy**2)**0.5
 
-            # Conditions for a successful landing
-            near_target = y <= 0 + self.H / 2.0 and abs(x) < self.target_r
-            almost_upright = abs(theta) < np.pi / 12  # Upright condition tightened
-            low_angular_velocity = abs(vtheta) < 1.0  # Threshold for angular velocity
+        # Conditions for a successful landing
+        near_target = y <= 0 + self.H / 2.0 and abs(x) < self.target_r
+        almost_upright = abs(theta) < np.pi / 12  # Upright condition tightened
+        low_angular_velocity = abs(vtheta) < 1.0  # Threshold for angular velocity
 
-            return near_target and almost_upright and low_angular_velocity
-        else:
-            return False
+        return near_target and almost_upright and low_angular_velocity
 
 
     def calculate_reward(self, state):
@@ -208,23 +182,16 @@ class Rocket(gym.Env):
 
         reward = dist_reward + pose_reward
 
-        if self.task == 'hover' and (dist_x**2 + dist_y**2)**0.5 <= 2*self.target_r:  # hit target
-            reward = 0.25
-        if self.task == 'hover' and (dist_x**2 + dist_y**2)**0.5 <= 1*self.target_r:  # hit target
-            reward = 0.5
-        if self.task == 'hover' and abs(state['theta']) > 90 / 180 * np.pi:
-            reward = 0
 
-        # Adjust reward scaling for landing
-        if self.task == 'landing':
-            if self.already_crash:
-                reward *= 0.5  # Penalize crashing
-            elif self.already_landing:
-                reward *= 2.0  # Reward for successful landing
-            else:
-                # Reward for getting closer to successful landing criteria
-                stability_factor = 1.0 - abs(state['theta']) / (np.pi / 12.0)
-                reward *= stability_factor
+        # Adjust reward scaling
+        if self.already_crash:
+            reward *= 0.5  # Penalize crashing
+        elif self.already_landing:
+            reward *= 2.0  # Reward for successful landing
+        else:
+            # Reward for getting closer to successful landing criteria
+            stability_factor = 1.0 - abs(state['theta']) / (np.pi / 12.0)
+            reward *= stability_factor
 
         return reward
 
@@ -445,18 +412,12 @@ class Rocket(gym.Env):
             polys['engine_work'].append({'pts': pts3, 'face_color': (255, 255, 255), 'edge_color': None})
             polys['engine_work'].append({'pts': pts4, 'face_color': (255, 255, 255), 'edge_color': None})
         # target region
-        if self.task == 'hover':
-            pts1 = utils.create_rectangle_poly(center=(self.target_x, self.target_y), w=0, h=self.target_r/3.0)
-            pts2 = utils.create_rectangle_poly(center=(self.target_x, self.target_y), w=self.target_r/3.0, h=0)
-            polys['target_region'].append({'pts': pts1, 'face_color': None, 'edge_color': (242, 242, 242)})
-            polys['target_region'].append({'pts': pts2, 'face_color': None, 'edge_color': (242, 242, 242)})
-        else:
-            pts1 = utils.create_ellipse_poly(center=(0, 0), rx=self.target_r, ry=self.target_r/4.0)
-            pts2 = utils.create_rectangle_poly(center=(0, 0), w=self.target_r/3.0, h=0)
-            pts3 = utils.create_rectangle_poly(center=(0, 0), w=0, h=self.target_r/6.0)
-            polys['target_region'].append({'pts': pts1, 'face_color': None, 'edge_color': (242, 242, 242)})
-            polys['target_region'].append({'pts': pts2, 'face_color': None, 'edge_color': (242, 242, 242)})
-            polys['target_region'].append({'pts': pts3, 'face_color': None, 'edge_color': (242, 242, 242)})
+        pts1 = utils.create_ellipse_poly(center=(0, 0), rx=self.target_r, ry=self.target_r/4.0)
+        pts2 = utils.create_rectangle_poly(center=(0, 0), w=self.target_r/3.0, h=0)
+        pts3 = utils.create_rectangle_poly(center=(0, 0), w=0, h=self.target_r/6.0)
+        polys['target_region'].append({'pts': pts1, 'face_color': None, 'edge_color': (242, 242, 242)})
+        polys['target_region'].append({'pts': pts2, 'face_color': None, 'edge_color': (242, 242, 242)})
+        polys['target_region'].append({'pts': pts3, 'face_color': None, 'edge_color': (242, 242, 242)})
 
         # apply transformation
         for poly in polys['rocket'] + polys['engine_work']:

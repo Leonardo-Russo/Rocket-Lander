@@ -18,7 +18,7 @@ if __name__ == '__main__':
     env = make_vec_env(env_fn, n_envs=4, seed=1)
 
     # Load the model
-    model_path = os.path.join('models', task + '_ppo')
+    model_path = os.path.join('Models', task + '_ppo')
     model = PPO.load(model_path)
 
     # Evaluate the model

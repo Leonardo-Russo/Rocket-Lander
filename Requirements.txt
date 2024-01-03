@@ -3,4 +3,4 @@ torch
 torchvision
 opencv-python
 stable-baselines3[extra]
-gym
+gymnasium
