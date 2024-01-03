@@ -1,10 +1,12 @@
+import gym
 import numpy as np
 import random
 import cv2
+from gym import spaces
 import utils
 
 
-class Rocket(object):
+class Rocket(gym.Env):
     """
     Rocket and environment.
     The rocket is simplified into a rigid body model with a thin rod,
@@ -27,8 +29,8 @@ class Rocket(object):
 
     """
 
-    def __init__(self, max_steps, task='hover', rocket_type='falcon',
-                 viewport_h=600, path_to_bg_img=None):
+    def __init__(self, max_steps, task='hover', rocket_type='falcon', viewport_h=600, path_to_bg_img=None):
+        super(Rocket, self).__init__()
 
         self.task = task
         self.rocket_type = rocket_type
@@ -55,8 +57,7 @@ class Rocket(object):
 
         # viewport height x width (pixels)
         self.viewport_h = int(viewport_h)
-        self.viewport_w = int(viewport_h * (self.world_x_max-self.world_x_min) \
-                          / (self.world_y_max - self.world_y_min))
+        self.viewport_w = int(viewport_h * (self.world_x_max - self.world_x_min) / (self.world_y_max - self.world_y_min))
         self.step_id = 0
 
         self.state = self.create_random_state()
@@ -71,18 +72,19 @@ class Rocket(object):
 
         self.state_buffer = []
 
+        # Define action space and observation space
+        self.action_space = spaces.Discrete(len(self.action_table))
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.state_dims,), dtype=np.float32)
 
-    def reset(self, state_dict=None):
 
-        if state_dict is None:
-            self.state = self.create_random_state()
-        else:
-            self.state = state_dict
-
+    def reset(self):
+        # Reset the environment to an initial state
+        self.state = self.create_random_state()
         self.state_buffer = []
         self.step_id = 0
         self.already_landing = False
-        cv2.destroyAllWindows()
+        self.already_crash = False
+        cv2.destroyAllWindows()  # Close any open CV windows
         return self.flatten(self.state)
 
     def create_action_table(self):
@@ -262,7 +264,7 @@ class Rocket(object):
         else:
             done = False
 
-        return self.flatten(self.state), reward, done, None
+        return self.flatten(self.state), reward, done, {}
 
     def flatten(self, state):
         x = [state['x'], state['y'], state['vx'], state['vy'],
@@ -272,7 +274,7 @@ class Rocket(object):
 
     def render(self, window_name='env', wait_time=1,
                with_trajectory=True, with_camera_tracking=True,
-               crop_scale=0.4):
+               crop_scale=0.4, mode='human'):
 
         canvas = np.copy(self.bg_img)
         polys = self.create_polygons()
@@ -578,4 +580,9 @@ class Rocket(object):
 
         vis = cv2.resize(vis, (self.viewport_w, self.viewport_h))
         return vis
+    
+
+    def seed(self, seed=None):
+        random.seed(seed)
+        np.random.seed(seed)
 

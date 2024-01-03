@@ -1,14 +1,11 @@
-import numpy as np
-import torch
-from rocket import Rocket
-from policy import ActorCritic
-import matplotlib.pyplot as plt
-import utils
 import os
 import glob
-
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
+from rocket import Rocket
 
 # Decide which device we want to run on
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -16,69 +13,31 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if __name__ == '__main__':
 
     task = 'landing'  # 'hover' or 'landing'
-
     max_m_episode = 800000
     max_steps = 800
 
-    # env = Rocket(task=task, max_steps=max_steps)
+    # Create a vectorized environment
+    env_fn = lambda: Rocket(task=task, max_steps=max_steps)
+    env = make_vec_env(env_fn, n_envs=4, seed=1)
 
-    # Initialize the Rocket environment
-    env_fn = lambda: Rocket(task='landing', max_steps=800)
-    env = make_vec_env(env_fn, n_envs=4)
-    
+    # Initialize the PPO model
+    model = PPO("MlpPolicy", env, verbose=1)
 
-    ckpt_folder = os.path.join('./', task + '_ckpt')
-    if not os.path.exists(ckpt_folder):
-        os.mkdir(ckpt_folder)
+    # Train the model
+    model.learn(total_timesteps=100)  # Adjust the number of timesteps as needed
 
-    last_episode_id = 0
-    REWARDS = []
+    # Save the model
+    model_path = os.path.join('models', task + '_ppo')
+    model.save(model_path)
 
-    net = ActorCritic(input_dim=env.state_dims, output_dim=env.action_dims).to(device)
-    if len(glob.glob(os.path.join(ckpt_folder, '*.pt'))) > 0:
-        # load the last ckpt
-        checkpoint = torch.load(glob.glob(os.path.join(ckpt_folder, '*.pt'))[-1])
-        net.load_state_dict(checkpoint['model_G_state_dict'])
-        last_episode_id = checkpoint['episode_id']
-        REWARDS = checkpoint['REWARDS']
+    # Load the model (if needed)
+    # model = PPO.load("ppo_rocket")
 
-    for episode_id in range(last_episode_id, max_m_episode):
-
-        # training loop
-        state = env.reset()
-        rewards, log_probs, values, masks = [], [], [], []
-        for step_id in range(max_steps):
-            action, log_prob, value = net.get_action(state)
-            state, reward, done, _ = env.step(action)
-            rewards.append(reward)
-            log_probs.append(log_prob)
-            values.append(value)
-            masks.append(1-done)
-            if episode_id % 100 == 1:
-                env.render()
-
-            if done or step_id == max_steps-1:
-                _, _, Qval = net.get_action(state)
-                net.update_ac(net, rewards, log_probs, values, masks, Qval, gamma=0.999)
-                break
-
-        REWARDS.append(np.sum(rewards))
-        print('episode id: %d, episode reward: %.3f'
-              % (episode_id, np.sum(rewards)))
-
-        if episode_id % 100 == 1:
-            plt.figure()
-            plt.plot(REWARDS), plt.plot(utils.moving_avg(REWARDS, N=50))
-            plt.legend(['episode reward', 'moving avg'], loc=2)
-            plt.xlabel('m episode')
-            plt.ylabel('reward')
-            plt.savefig(os.path.join(ckpt_folder, 'rewards_' + str(episode_id).zfill(8) + '.jpg'))
-            plt.close()
-
-            torch.save({'episode_id': episode_id,
-                        'REWARDS': REWARDS,
-                        'model_G_state_dict': net.state_dict()},
-                       os.path.join(ckpt_folder, 'ckpt_' + str(episode_id).zfill(8) + '.pt'))
-
-
+    # Evaluate the model
+    obs = env.reset()
+    for i in range(1000):
+        action, _states = model.predict(obs, deterministic=True)
+        obs, rewards, dones, info = env.step(action)
+        # env.render(render_mode='human')
+        env.envs[0].render()
 
