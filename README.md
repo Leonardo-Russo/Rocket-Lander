@@ -4,6 +4,12 @@
 ## Overview
 This project involves the simulation and reinforcement learning training of a rocket landing task. The rocket, represented as a rigid body with a thin rod, is modeled in a simulated environment where it must land on a pre-defined point on the ground. The simulation is built using the Gymnasium framework.
 
+## GIF Demonstrations
+<p float="left">
+  <img src="gallery/test1.gif" width="400" />
+  <img src="gallery/test2.gif" width="400" /> 
+</p>
+
 ## Environment
 - The environment simulates a rocket with physical properties such as acceleration, angular acceleration, and air resistance.
 - The simulation area has defined world boundaries within which the rocket operates.
