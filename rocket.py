@@ -84,15 +84,15 @@ class Rocket(gym.Env):
         self.step_id = 0
         self.already_landing = False
         self.already_crash = False
-        cv2.destroyAllWindows()  # Close any open CV windows
+        cv2.destroyAllWindows()     # Close any open CV windows
         infos = {}
         return self.flatten(self.state), infos
 
     def create_action_table(self):
-        f0 = 0.2 * self.g  # thrust
+        f0 = 0.2 * self.g           # Thrust magnitude
         f1 = 1.0 * self.g
         f2 = 2 * self.g
-        vphi0 = 0  # Nozzle angular velocity
+        vphi0 = 0                   # Nozzle angular acceleration
         vphi1 = 30 / 180 * np.pi
         vphi2 = -30 / 180 * np.pi
 
@@ -102,12 +102,14 @@ class Rocket(gym.Env):
                         ]
         return action_table
 
+
     def get_random_action(self):
         return random.randint(0, len(self.action_table)-1)
 
+
     def create_random_state(self):
 
-        # predefined locations
+        # Predefined Locations
         x_range = self.world_x_max - self.world_x_min
         y_range = self.world_y_max - self.world_y_min
         xc = (self.world_x_max + self.world_x_min) / 2.0
@@ -169,19 +171,24 @@ class Rocket(gym.Env):
             return crash
 
     def check_landing_success(self, state):
-        if self.task == 'hover':
-            return False
-        elif self.task == 'landing':
+        if self.task == 'landing':
             x, y = state['x'], state['y']
             vx, vy = state['vx'], state['vy']
             theta = state['theta']
             vtheta = state['vtheta']
             v = (vx**2 + vy**2)**0.5
-            return True if y <= 0 + self.H / 2.0 and v < 15.0 and abs(x) < self.target_r \
-                           and abs(theta) < 10/180*np.pi and abs(vtheta) < 10/180*np.pi else False
+
+            # Conditions for a successful landing
+            near_target = y <= 0 + self.H / 2.0 and abs(x) < self.target_r
+            almost_upright = abs(theta) < np.pi / 12  # Upright condition tightened
+            low_angular_velocity = abs(vtheta) < 1.0  # Threshold for angular velocity
+
+            return near_target and almost_upright and low_angular_velocity
+        else:
+            return False
+
 
     def calculate_reward(self, state):
-
         x_range = self.world_x_max - self.world_x_min
         y_range = self.world_y_max - self.world_y_min
 
@@ -192,7 +199,8 @@ class Rocket(gym.Env):
 
         dist_reward = 0.1*(1.0 - dist_norm)
 
-        if abs(state['theta']) <= np.pi / 6.0:
+        # Updated upright threshold from π/6 to π/12
+        if abs(state['theta']) <= np.pi / 12.0:
             pose_reward = 0.1
         else:
             pose_reward = abs(state['theta']) / (0.5*np.pi)
@@ -207,11 +215,16 @@ class Rocket(gym.Env):
         if self.task == 'hover' and abs(state['theta']) > 90 / 180 * np.pi:
             reward = 0
 
-        v = (state['vx'] ** 2 + state['vy'] ** 2) ** 0.5
-        if self.task == 'landing' and self.already_crash:
-            reward = (reward + 5*np.exp(-1*v/10.)) * (self.max_steps - self.step_id)
-        if self.task == 'landing' and self.already_landing:
-            reward = (1.0 + 5*np.exp(-1*v/10.))*(self.max_steps - self.step_id)
+        # Adjust reward scaling for landing
+        if self.task == 'landing':
+            if self.already_crash:
+                reward *= 0.5  # Penalize crashing
+            elif self.already_landing:
+                reward *= 2.0  # Reward for successful landing
+            else:
+                # Reward for getting closer to successful landing criteria
+                stability_factor = 1.0 - abs(state['theta']) / (np.pi / 12.0)
+                reward *= stability_factor
 
         return reward
 
