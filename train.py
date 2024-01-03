@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     # Create a vectorized environment
     env_fn = lambda: Rocket(task=task, max_steps=max_steps)
-    env = make_vec_env(env_fn, n_envs=4, seed=1)
+    env = make_vec_env(env_fn, n_envs=4)
 
     # Load the model or create a new one
     model_path = os.path.join('models', task + '_ppo')
@@ -25,7 +25,7 @@ if __name__ == '__main__':
         model = PPO("MlpPolicy", env, verbose=1)
 
     # Train the model
-    model.learn(total_timesteps=10000)  # Adjust the number of timesteps as needed
+    model.learn(total_timesteps=10000000)  # Adjust the number of timesteps as needed
 
     # Save the model
     model_path = os.path.join('models', task + '_ppo')
