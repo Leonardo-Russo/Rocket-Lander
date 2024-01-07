@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     # Create a vectorized environment
     env_fn = lambda: Rocket(task=task, max_steps=max_steps)
-    env = make_vec_env(env_fn, n_envs=4)
+    env = make_vec_env(env_fn, n_envs=1)
 
     # Load the model or create a new one
     model_path = os.path.join('Models', task + '_ppo')
