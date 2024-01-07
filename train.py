@@ -5,7 +5,8 @@ from stable_baselines3.common.env_util import make_vec_env
 from rocket import Rocket
 
 # Decide which device we want to run on
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
 
 if __name__ == '__main__':
 
@@ -25,7 +26,7 @@ if __name__ == '__main__':
         model = PPO("MlpPolicy", env, verbose=1)
 
     # Train the model
-    model.learn(total_timesteps=100000, progress_bar=True)  # Adjust the number of timesteps as needed
+    model.learn(total_timesteps=10000, progress_bar=True)  # Adjust the number of timesteps as needed
 
     # Save the model
     model_path = os.path.join('models', task + '_ppo')

@@ -34,42 +34,44 @@ class Rocket(gym.Env):
         self.I = 1/12*self.H*self.H  # Moment of inertia
         self.dt = 0.05
 
+        # Set Help Parameters
+        self.step_id = 0
+        self.max_steps = max_steps
+        self.state_dims = 8
+
         # Set World Boundaries
-        self.world_x_min = -300  # meters
-        self.world_x_max = 300
-        self.world_y_min = -30
-        self.world_y_max = 570
+        self.world_x_min, self.world_x_max = -300, 300
+        self.world_y_min, self.world_y_max = -30, 570
 
         # Define Target Point
         self.target_x, self.target_y, self.target_r = 0, self.H/2.0, 50
 
-        # Initialize Utilities
+        # Initialize Crash and Landing Flags
         self.already_landing = False
         self.already_crash = False
-        self.max_steps = max_steps
 
         # Set Viewport height x width [pixels]
         self.viewport_h = int(viewport_h)
         self.viewport_w = int(viewport_h * (self.world_x_max - self.world_x_min) / (self.world_y_max - self.world_y_min))
-        self.step_id = 0
 
-        # Initialize State and Action Table
+        # Initialize State and State Buffer
         self.state = self.create_random_state()
-        self.action_table = self.create_action_table()
+        self.state_buffer = []      # initalize state buffer
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.state_dims,), dtype=np.float32)
 
-        self.state_dims = 8
-        self.action_dims = len(self.action_table)
+        # Initialize Action Space
+        min_thrust, max_thrust = 0.2*self.g, 2.0*self.g         # min and max thrust
+        min_angle, max_angle = -np.pi/6, np.pi/6                # min and max nozzle angular acceleration
+
+        self.action_space = spaces.Box(low=np.array([min_thrust, min_angle]), 
+                               high=np.array([max_thrust, max_angle]), 
+                               dtype=np.float32)
 
         # Load Background Image
         if path_to_bg_img is None:
-            path_to_bg_img = 'Gallery/landing.jpg'
+            path_to_bg_img = 'gallery/landing.jpg'
         self.bg_img = utils.load_bg_img(path_to_bg_img, w=self.viewport_w, h=self.viewport_h)
 
-        self.state_buffer = []      # initalize state buffer
-
-        # Define Action space and Observation space
-        self.action_space = spaces.Discrete(len(self.action_table))
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.state_dims,), dtype=np.float32)
 
 
     def reset(self, **kwargs):
@@ -87,37 +89,6 @@ class Rocket(gym.Env):
 
         return self.flatten(self.state), infos
 
-
-    def create_action_table(self):
-        '''
-        Define the Action Table from Physical Parameters
-        '''
-
-        # Thrust magnitude
-        f0 = 0.2 * self.g           
-        f1 = 1.0 * self.g
-        f2 = 2 * self.g
-
-        # Nozzle angular acceleration
-        vphi0 = 0                   
-        vphi1 = 30 / 180 * np.pi    
-        vphi2 = -30 / 180 * np.pi
-
-        # 3x3 Action Table
-        action_table = [[f0, vphi0], [f0, vphi1], [f0, vphi2],
-                        [f1, vphi0], [f1, vphi1], [f1, vphi2],
-                        [f2, vphi0], [f2, vphi1], [f2, vphi2]
-                        ]
-        
-        return action_table
-
-
-    def get_random_action(self):
-        '''
-        Helper function to create random action.
-        '''
-
-        return random.randint(0, len(self.action_table)-1)
 
 
     def create_random_state(self):
@@ -205,20 +176,25 @@ class Rocket(gym.Env):
         x_range = self.world_x_max - self.world_x_min
         y_range = self.world_y_max - self.world_y_min
 
-        # dist between agent and target point
+        # Compute Distance Reward
         dist_x = abs(state['x'] - self.target_x)
         dist_y = abs(state['y'] - self.target_y)
         dist_norm = dist_x / x_range + dist_y / y_range
 
-        dist_reward = 0.1*(1.0 - dist_norm)
+        dist_reward = 0.01*(1.5 - dist_norm)
 
-        # Updated upright threshold from π/6 to π/12
-        if abs(state['theta']) <= np.pi / 12.0:
-            pose_reward = 0.1
+        # Compute Pose Reward
+        pose_threshold = np.deg2rad(2)      # 2 deg as maximum pose reward threshold
+        if abs(state['theta']) <= pose_threshold:
+            pose_reward = 0.15
         else:
             pose_reward = abs(state['theta']) / (0.5*np.pi)
-            pose_reward = 0.1 * (1.0 - pose_reward)
+            pose_reward = 0.15 * (1.0 - pose_reward)
 
+        # print('Distance Reward:\t', dist_reward, '\nPose Reward:\t', pose_reward)
+
+
+        # Compute Total Reward
         reward = dist_reward + pose_reward
 
 
@@ -227,10 +203,8 @@ class Rocket(gym.Env):
             reward *= 0.5  # Penalize crashing
         elif self.already_landing:
             reward *= 2.0  # Reward for successful landing
-        else:
-            # Reward for getting closer to successful landing criteria
-            stability_factor = 1.0 - abs(state['theta']) / (np.pi / 12.0)
-            reward *= stability_factor
+
+        # print('\nScaled Reward:\t', reward)
 
         return reward
 
@@ -243,7 +217,7 @@ class Rocket(gym.Env):
         theta, vtheta = self.state['theta'], self.state['vtheta']
         phi = self.state['phi']
 
-        f, vphi = self.action_table[action]
+        f, vphi = action
 
         ft, fr = -f*np.sin(phi), f*np.cos(phi)
         fx = ft*np.cos(theta) - fr*np.sin(theta)
